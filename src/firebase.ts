@@ -16,4 +16,18 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export const handleFirestoreError = (error: unknown): never => {
+  console.error('Firestore error:', error);
+  throw error;
+};
+
 export { signInWithPopup, onAuthStateChanged, doc, getDocFromServer, setDoc, collection, onSnapshot, query, where };
