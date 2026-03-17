@@ -1,0 +1,8 @@
+{
+  "name": "Remix: VakilVerify - Legal Verification \u0026 Rating System",
+  "description": "AI-powered lawyer verification and rating system for India using Bar Council records, eCourts data, and document verification.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

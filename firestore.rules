@@ -1,0 +1,188 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (matches Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required) - The user's unique ID
+    //   - email: string (required, email format) - The user's email address
+    //   - displayName: string (optional) - The user's display name
+    //   - role: string (required, enum: ['user', 'lawyer', 'admin']) - The user's role
+    //   - plan: string (optional, enum: ['base', 'pro']) - The user's subscription plan
+    //   - analysesThisMonth: number (optional) - Number of analyses used this month
+    //   - lastAnalysisReset: timestamp (optional) - When the analysis count was last reset
+    //   - createdAt: timestamp (optional) - When the user was created
+    //   - isPermanentlyBlocked: boolean (optional) - Whether the user is permanently banned
+    //   - blockedUntil: timestamp (optional) - When the user's temporary block expires
+    //
+    // Collection: lawyers
+    // Document ID: {userId} (matches Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required) - The lawyer's unique ID
+    //   - qualifications: string (required) - Educational background
+    //   - licenseNumber: string (required) - Professional license number
+    //   - history: string (required) - Professional history
+    //   - verificationStatus: string (required, enum: ['pending', 'verified', 'rejected'])
+    //   - domain: string (required) - Specialization
+    //   - price: number (required) - Review fee
+    //   - rating: number (required) - Average rating
+    //   - reviewCount: number (required) - Total reviews
+    //   - casesWon: number (optional) - Number of cases won
+    //   - casesLost: number (optional) - Number of cases lost
+    //   - maxActiveContracts: number (optional) - Max contracts lawyer can handle
+    //   - activeContractsCount: number (optional) - Current active contracts
+    //   - immutableFieldsVerified: boolean (optional) - Whether core fields are locked
+    //
+    // Collection: contracts
+    // Document ID: {contractId} (auto-generated)
+    // Fields:
+    //   - ownerId: string (required) - UID of the contract owner
+    //   - fileName: string (required) - Name of the uploaded file
+    //   - content: string (required) - Extracted text
+    //   - status: string (required, enum: ['analyzing', 'completed', 'review_requested', 'review_accepted', 'review_ready', 'reviewed'])
+    //   - grade: string (optional, enum: ['A', 'B', 'C', 'D', 'E', 'F']) - Risk grade
+    //   - lawyerFee: number (optional) - Fee for the lawyer
+    //   - platformFee: number (optional) - Platform commission
+    //   - aiAnalysis: map (optional) - AI analysis results
+    //   - lawyerReviewId: string (optional) - ID of the review document
+    //   - hasTrustSeal: boolean (optional) - Whether the contract has a trust seal
+    //   - createdAt: timestamp (required) - When the contract was uploaded
+    //
+    // Collection: reviews
+    // Document ID: {reviewId} (auto-generated)
+    // Fields:
+    //   - contractId: string (required) - ID of the reviewed contract
+    //   - lawyerId: string (required) - UID of the reviewing lawyer
+    //   - report: string (required) - The lawyer's review report
+    //   - status: string (optional, enum: ['draft', 'ready', 'paid']) - Review status
+    //   - createdAt: timestamp (required) - When the review was created
+    //
+    // Collection: payments
+    // Document ID: {paymentId} (auto-generated)
+    // Fields:
+    //   - userId: string (required) - UID of the user making the payment
+    //   - lawyerId: string (required) - UID of the lawyer being paid
+    //   - contractId: string (required) - ID of the contract being reviewed
+    //   - amount: number (required) - Payment amount
+    //   - status: string (required, enum: ['pending', 'completed', 'failed'])
+    //   - createdAt: timestamp (required) - When the payment was recorded
+    //
+    // Collection: admin_activity
+    // Document ID: {activityId} (auto-generated)
+    // Fields:
+    //   - type: string (required, enum: ['user_blocked', 'lawyer_verified', 'payment_received', 'rating_changed', 'contract_uploaded'])
+    //   - description: string (required) - Description of the activity
+    //   - metadata: map (optional) - Additional activity data
+    //   - createdAt: timestamp (required) - When the activity occurred
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "navdeeprathee12@gmail.com" || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'));
+    }
+
+    function isLawyer() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'lawyer';
+    }
+
+    function isNotBlocked() {
+      return !isAuthenticated() || 
+             !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isPermanentlyBlocked', false) == false &&
+              (!('blockedUntil' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) || 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.blockedUntil < request.time));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['user', 'lawyer', 'admin'] &&
+             (!('plan' in data) || data.plan in ['base', 'pro']) &&
+             (!('analysesThisMonth' in data) || data.analysesThisMonth is number) &&
+             (!('lastAnalysisReset' in data) || data.lastAnalysisReset is timestamp);
+    }
+
+    // User Rules
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isOwner(userId) && 
+                      (request.resource.data.role in ['user', 'lawyer'] || 
+                       (request.resource.data.role == 'admin' && request.auth.token.email == "navdeeprathee12@gmail.com")) &&
+                      isValidUser(request.resource.data);
+      allow update: if (isAdmin() || (isOwner(userId) && 
+                      (request.resource.data.role == resource.data.role || 
+                       (resource.data.role == 'user' && request.resource.data.role == 'lawyer') ||
+                       (request.resource.data.role == 'admin' && request.auth.token.email == "navdeeprathee12@gmail.com")))) &&
+                      isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Lawyer Rules
+    match /lawyers/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && 
+                      request.resource.data.verificationStatus == 'pending' &&
+                      request.resource.data.rating >= 0 &&
+                      request.resource.data.reviewCount == 0;
+      allow update: if isAdmin() || 
+                      (isOwner(userId) && 
+                       (!resource.data.get('immutableFieldsVerified', false) || (
+                         request.resource.data.licenseNumber == resource.data.licenseNumber &&
+                         request.resource.data.qualifications == resource.data.qualifications
+                       )) &&
+                       request.resource.data.verificationStatus == resource.data.verificationStatus &&
+                       request.resource.data.rating == resource.data.rating &&
+                       request.resource.data.reviewCount == resource.data.reviewCount &&
+                       request.resource.data.get('maxActiveContracts', 5) == resource.data.get('maxActiveContracts', 5));
+    }
+
+    // Contract Rules
+    match /contracts/{contractId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.ownerId || isLawyer() || isAdmin());
+      allow create: if isAuthenticated() && isNotBlocked() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isAuthenticated() && isNotBlocked() && (request.auth.uid == resource.data.ownerId || isLawyer() || isAdmin());
+      allow delete: if isAuthenticated() && isNotBlocked() && request.auth.uid == resource.data.ownerId;
+    }
+
+    // Review Rules
+    match /reviews/{reviewId} {
+      allow read: if isAuthenticated();
+      allow create: if isLawyer();
+      allow update: if isLawyer() && request.auth.uid == resource.data.lawyerId;
+    }
+
+    // Payment Rules
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || (isAuthenticated() && (request.auth.uid == resource.data.userId || request.auth.uid == resource.data.lawyerId));
+      allow create: if isAuthenticated() && isNotBlocked();
+      allow update: if isAdmin();
+    }
+
+    // Admin Activity Rules
+    match /admin_activity/{activityId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
+

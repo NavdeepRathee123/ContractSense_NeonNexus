@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "lawyer", "admin"] },
+        "plan": { "type": "string", "enum": ["base", "pro"] },
+        "analysesThisMonth": { "type": "integer" },
+        "lastAnalysisReset": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "blockedUntil": { "type": "string", "format": "date-time", "description": "Timestamp until which the user is timed out" },
+        "isPermanentlyBlocked": { "type": "boolean", "description": "Whether the user is permanently banned" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "LawyerProfile": {
+      "title": "Lawyer Profile",
+      "description": "Detailed profile for verified lawyers",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "qualifications": { "type": "string", "description": "Educational background and certifications" },
+        "licenseNumber": { "type": "string", "description": "Professional license or BAR number" },
+        "history": { "type": "string", "description": "Professional history and experience" },
+        "verificationStatus": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "domain": { "type": "string", "description": "Specialization domain" },
+        "price": { "type": "number", "description": "Review fee per contract" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "integer" },
+        "casesWon": { "type": "integer" },
+        "casesLost": { "type": "integer" },
+        "maxActiveContracts": { "type": "integer", "description": "Maximum number of contracts the lawyer can handle at once" },
+        "activeContractsCount": { "type": "integer", "description": "Current number of active contracts" },
+        "priceLimit": {
+          "type": "object",
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "immutableFieldsVerified": { "type": "boolean", "description": "True once initial rating is given, locking core fields" }
+      },
+      "required": ["uid", "qualifications", "licenseNumber", "history", "domain", "price", "verificationStatus"]
+    },
+    "Contract": {
+      "title": "Contract",
+      "description": "Contract document and analysis results",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "content": { "type": "string", "description": "Extracted text from contract" },
+        "type": { "type": "string" },
+        "status": { "type": "string", "enum": ["analyzing", "completed", "review_requested", "review_accepted", "review_ready", "reviewed"] },
+        "grade": { "type": "string", "enum": ["A", "B", "C", "D", "E", "F"], "description": "Risk grade from A (dangerous) to F (good)" },
+        "lawyerFee": { "type": "number" },
+        "platformFee": { "type": "number" },
+        "aiAnalysis": {
+          "type": "object",
+          "properties": {
+            "summary": { "type": "string" },
+            "clauses": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "crux": { "type": "string", "description": "Short heading summarizing the clause" },
+                  "original": { "type": "string" },
+                  "plainEnglish": { "type": "string" },
+                  "riskLevel": { "type": "string", "enum": ["green", "yellow", "red"] },
+                  "reasoning": { "type": "string" },
+                  "counterPoint": { "type": "string" },
+                  "suggestedWording": { "type": "string" },
+                  "outcomeSimulator": { "type": "string", "description": "Possible court reasoning or future trouble related to this clause" }
+                }
+              }
+            },
+            "partyIntelligence": {
+              "type": "object",
+              "properties": {
+                "reputation": { "type": "string" },
+                "summary": { "type": "string" }
+              }
+            }
+          }
+        },
+        "lawyerReviewId": { "type": "string" },
+        "hasTrustSeal": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "fileName"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Lawyer's review of a contract",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "contractId": { "type": "string" },
+        "lawyerId": { "type": "string" },
+        "report": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "ready", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["contractId", "lawyerId", "report"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment records for lawyer reviews",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "lawyerId": { "type": "string" },
+        "contractId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "lawyerId", "contractId", "amount", "status"]
+    },
+    "AdminActivity": {
+      "title": "Admin Activity",
+      "description": "Log of important events for admin portal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["user_blocked", "lawyer_verified", "payment_received", "rating_changed", "contract_uploaded"] },
+        "description": { "type": "string" },
+        "metadata": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "description", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/lawyers/{userId}": {
+      "schema": "LawyerProfile",
+      "description": "Lawyer professional profiles"
+    },
+    "/contracts/{contractId}": {
+      "schema": "Contract",
+      "description": "Contract analysis data"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Lawyer reviews"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment records"
+    },
+    "/admin_activity/{activityId}": {
+      "schema": "AdminActivity",
+      "description": "Admin activity logs"
+    }
+  }
+}
