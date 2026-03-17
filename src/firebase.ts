@@ -25,8 +25,8 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export const handleFirestoreError = (error: unknown): never => {
-  console.error('Firestore error:', error);
+export const handleFirestoreError = (error: unknown, operation?: OperationType, collection?: string): never => {
+  console.error(`Firestore error during ${operation || 'unknown'} on ${collection || 'unknown'}:`, error);
   throw error;
 };
 
